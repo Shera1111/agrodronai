@@ -37,6 +37,7 @@ export const summary = {
 export type Detection = {
   id: string
   label: string
+  type?: string
   confidence: number
   risk: 'high' | 'medium' | 'low'
   recommendation: string
@@ -70,6 +71,88 @@ export const detections: Detection[] = [
     box: { top: 14, left: 62, width: 18, height: 18 },
   },
 ]
+
+// ---- Backend API (analyze-crop-health) ----
+
+export type ApiDetection = {
+  id: string | number
+  label: string
+  type: string
+  severity: string
+  recommended_action: string
+  confidence: number
+  bounding_box: number[] | { x?: number; y?: number; top?: number; left?: number; width?: number; height?: number }
+}
+
+export type AnalysisSummary = {
+  critical_issues?: number
+  medium_issues?: number
+  low_issues?: number
+  requires_immediate_action?: boolean
+  overall_field_status?: string
+}
+
+export type AnalysisResponse = {
+  status: string
+  processed_file: string
+  crop_type: string
+  summary: string | AnalysisSummary
+  total_issues_found: number
+  detections: ApiDetection[]
+}
+
+function normalizeRisk(severity: string): Detection['risk'] {
+  const s = (severity ?? '').toString().toLowerCase()
+  if (['high', 'critical', 'severe', 'danger'].some((k) => s.includes(k))) return 'high'
+  if (['medium', 'moderate', 'warning', 'monitor'].some((k) => s.includes(k))) return 'medium'
+  return 'low'
+}
+
+function normalizeConfidence(confidence: number): number {
+  if (confidence == null || Number.isNaN(confidence)) return 0
+  // accept either 0-1 or 0-100 scales
+  const pct = confidence <= 1 ? confidence * 100 : confidence
+  return Math.round(Math.min(100, Math.max(0, pct)))
+}
+
+function normalizeBox(bb: ApiDetection['bounding_box']): Detection['box'] {
+  let top = 0
+  let left = 0
+  let width = 0
+  let height = 0
+
+  if (Array.isArray(bb)) {
+    // [x, y, width, height]
+    ;[left, top, width, height] = [bb[0] ?? 0, bb[1] ?? 0, bb[2] ?? 0, bb[3] ?? 0]
+  } else if (bb && typeof bb === 'object') {
+    left = bb.left ?? bb.x ?? 0
+    top = bb.top ?? bb.y ?? 0
+    width = bb.width ?? 0
+    height = bb.height ?? 0
+  }
+
+  // if values look normalized (0-1), scale to percentages
+  const scale = (v: number) => (Math.abs(v) <= 1 ? v * 100 : v)
+  return {
+    top: scale(top),
+    left: scale(left),
+    width: scale(width),
+    height: scale(height),
+  }
+}
+
+export function mapAnalysisToDetections(res: AnalysisResponse): Detection[] {
+  if (!res?.detections?.length) return []
+  return res.detections.map((d, i) => ({
+    id: String(d.id ?? `d${i + 1}`),
+    label: d.label,
+    type: d.type,
+    confidence: normalizeConfidence(d.confidence),
+    risk: normalizeRisk(d.severity),
+    recommendation: d.recommended_action,
+    box: normalizeBox(d.bounding_box),
+  }))
+}
 
 export const reports = [
   { id: 'R-2048', field: 'Maple Hollow', type: 'Disease Scan', date: 'Sep 12, 2026', status: 'Action Required', findings: 'Early blight, aphids' },
