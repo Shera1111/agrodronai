@@ -12,7 +12,7 @@ import {
   type Detection,
 } from '@/lib/data'
 
-const IMAGE_NAME = 'field-aerial.jpg'
+const DEFAULT_IMAGE_NAME = 'field-aerial.jpg'
 
 async function analyzeFetcher(imageName: string): Promise<AnalysisResponse> {
   const res = await fetch('/api/analyze-crop', {
@@ -29,9 +29,10 @@ async function analyzeFetcher(imageName: string): Promise<AnalysisResponse> {
 
 export default function InspectionPage() {
   const [active, setActive] = useState<string | null>(null)
+  const [imageName, setImageName] = useState<string>(DEFAULT_IMAGE_NAME)
 
   const { data, error, isLoading } = useSWR<AnalysisResponse>(
-    IMAGE_NAME,
+    imageName,
     analyzeFetcher,
     { revalidateOnFocus: false, shouldRetryOnError: false },
   )
@@ -48,7 +49,7 @@ export default function InspectionPage() {
       <PageHeader
         title="Drone Inspection"
         description="AI Vision analysis of the latest captured field imagery."
-        actions={<UploadButton />}
+        actions={<UploadButton onFileSelected={setImageName} />}
       />
 
       <div className="grid gap-6 p-6 lg:grid-cols-[1fr_360px] lg:p-8">

@@ -4,15 +4,21 @@ import { useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Upload, Loader2, Check } from 'lucide-react'
 
-export function UploadButton() {
+export function UploadButton({
+  onFileSelected,
+}: {
+  onFileSelected?: (fileName: string) => void
+}) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [state, setState] = useState<'idle' | 'uploading' | 'done'>('idle')
 
   function handleFiles(files: FileList | null) {
     if (!files || files.length === 0) return
+    const file = files[0]
     setState('uploading')
     setTimeout(() => {
       setState('done')
+      onFileSelected?.(file.name)
       setTimeout(() => setState('idle'), 2500)
     }, 1600)
   }
