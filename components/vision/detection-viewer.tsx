@@ -24,6 +24,7 @@ export function DetectionViewer({
   title,
   subtitle,
   loading,
+  imageSrc,
 }: {
   active: string | null
   onHover: (id: string | null) => void
@@ -31,6 +32,8 @@ export function DetectionViewer({
   title: string
   subtitle: string
   loading?: boolean
+  imageSrc?: string
+
 }) {
   const [showBoxes, setShowBoxes] = useState(true)
 
@@ -53,10 +56,11 @@ export function DetectionViewer({
       </div>
 
       <div className="relative aspect-[4/3] w-full bg-muted">
-        <Image
-          src="/field-aerial.png"
-          alt="Aerial drone photo of Maple Hollow crop field under AI analysis"
+                <Image
+          src={imageSrc || '/field-aerial.png'}
+          alt="Aerial drone photo of the crop field under AI analysis"
           fill
+          unoptimized={imageSrc?.startsWith('blob:')}
           className="object-cover"
           priority
         />
