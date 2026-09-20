@@ -30,12 +30,18 @@ async function analyzeFetcher(imageName: string): Promise<AnalysisResponse> {
 export default function InspectionPage() {
   const [active, setActive] = useState<string | null>(null)
   const [imageName, setImageName] = useState<string>(DEFAULT_IMAGE_NAME)
+  const [imagePreview, setImagePreview] = useState<string | undefined>(undefined)
 
   const { data, error, isLoading } = useSWR<AnalysisResponse>(
     imageName,
     analyzeFetcher,
     { revalidateOnFocus: false, shouldRetryOnError: false },
   )
+
+  function handleFileSelected(fileName: string, previewUrl: string) {
+    setImageName(fileName)
+    setImagePreview(previewUrl)
+  }
 
   const detections: Detection[] = data ? mapAnalysisToDetections(data) : []
   const subtitle = data
@@ -49,7 +55,7 @@ export default function InspectionPage() {
       <PageHeader
         title="Drone Inspection"
         description="AI Vision analysis of the latest captured field imagery."
-        actions={<UploadButton onFileSelected={setImageName} />}
+        actions={<UploadButton onFileSelected={handleFileSelected} />}
       />
 
       <div className="grid gap-6 p-6 lg:grid-cols-[1fr_360px] lg:p-8">
@@ -60,6 +66,7 @@ export default function InspectionPage() {
           title="Maple Hollow · Sector 4"
           subtitle={subtitle}
           loading={isLoading}
+          imageSrc={imagePreview}
         />
         <ResultsPanel
           active={active}
