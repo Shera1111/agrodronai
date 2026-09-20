@@ -7,7 +7,7 @@ import { Upload, Loader2, Check } from 'lucide-react'
 export function UploadButton({
   onFileSelected,
 }: {
-  onFileSelected?: (fileName: string) => void
+  onFileSelected?: (fileName: string, previewUrl: string) => void
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [state, setState] = useState<'idle' | 'uploading' | 'done'>('idle')
@@ -15,10 +15,11 @@ export function UploadButton({
   function handleFiles(files: FileList | null) {
     if (!files || files.length === 0) return
     const file = files[0]
+    const previewUrl = URL.createObjectURL(file)
     setState('uploading')
     setTimeout(() => {
       setState('done')
-      onFileSelected?.(file.name)
+      onFileSelected?.(file.name, previewUrl)
       setTimeout(() => setState('idle'), 2500)
     }, 1600)
   }
