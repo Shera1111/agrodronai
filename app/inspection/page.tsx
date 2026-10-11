@@ -7,48 +7,47 @@ import { DetectionViewer } from '@/components/vision/detection-viewer'
 import { ResultsPanel } from '@/components/vision/results-panel'
 import { UploadButton } from '@/components/upload-button'
 import {
-  mapAnalysisToDetections,
-  type AnalysisResponse,
+  mapYoloToDetections,
+  summarizeDetections,
   type Detection,
+  type YoloResponse,
 } from '@/lib/data'
 
-const DEFAULT_IMAGE_NAME = 'field-aerial.jpg'
+const BACKEND_URL = 'https://agro-drone-backend.onrender.com/'
 
-async function analyzeFetcher(imageName: string): Promise<AnalysisResponse> {
-  const res = await fetch('/api/analyze-crop', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ image_name: imageName }),
-  })
+async function analyzeFetcher([, file]: [string, File]): Promise<YoloResponse> {
+  const form = new FormData()
+  form.append('image', file)
+  const res = await fetch(BACKEND_URL, { method: 'POST', body: form })
   const data = await res.json()
   if (!res.ok) {
     throw new Error(data?.error ?? 'Analysis request failed.')
   }
-  return data as AnalysisResponse
+  return data as YoloResponse
 }
 
 export default function InspectionPage() {
   const [active, setActive] = useState<string | null>(null)
-  const [imageName, setImageName] = useState<string>(DEFAULT_IMAGE_NAME)
+  const [file, setFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | undefined>(undefined)
 
-  const { data, error, isLoading } = useSWR<AnalysisResponse>(
-    imageName,
+  const { data, error, isLoading } = useSWR(
+    file ? (['analyze', file] as [string, File]) : null,
     analyzeFetcher,
     { revalidateOnFocus: false, shouldRetryOnError: false },
   )
 
-  function handleFileSelected(fileName: string, previewUrl: string) {
-    setImageName(fileName)
+  function handleFileSelected(_name: string, previewUrl: string, selected: File) {
     setImagePreview(previewUrl)
+    setFile(selected)
   }
 
-  const detections: Detection[] = data ? mapAnalysisToDetections(data) : []
+  const detections: Detection[] = data ? mapYoloToDetections(data) : []
   const subtitle = data
-    ? `${data.processed_file} · ${data.total_issues_found} issues · status: ${data.status}`
+    ? `${file?.name} · ${data.detections_count} detections · ${data.image_size.width}×${data.image_size.height}px`
     : isLoading
-      ? 'Requesting analysis from backend…'
-      : 'Awaiting analysis'
+      ? 'Analyzing with the YOLO model… (first request can take about a minute)'
+      : 'Upload a drone photo to start analysis'
 
   return (
     <main>
@@ -72,8 +71,8 @@ export default function InspectionPage() {
           active={active}
           onHover={setActive}
           detections={detections}
-          cropType={data?.crop_type}
-          summary={data?.summary}
+          cropType={undefined}
+          summary={data ? summarizeDetections(detections) : undefined}
           loading={isLoading}
           error={error ? (error as Error).message : null}
         />
