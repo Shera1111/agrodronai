@@ -167,4 +167,57 @@ export const statusStyles: Record<FieldStatus, { dot: string; label: string; bad
   healthy: { dot: 'bg-primary', label: 'Healthy', badge: 'bg-primary/10 text-primary border-primary/20' },
   monitor: { dot: 'bg-warning', label: 'Monitor', badge: 'bg-warning/15 text-warning-foreground border-warning/30' },
   issue: { dot: 'bg-destructive', label: 'Issue Detected', badge: 'bg-destructive/10 text-destructive border-destructive/20' },
+} 
+// ---- Real YOLO backend (Render) ----
+
+export type YoloDetection = {
+  class_name: string
+  confidence: number
+  box: { x_min: number; y_min: number; x_max: number; y_max: number }
+}
+
+export type YoloResponse = {
+  detections: YoloDetection[]
+  detections_count: number
+  image_size: { width: number; height: number }
+}
+
+export function mapYoloToDetections(res: YoloResponse): Detection[] {
+  const { width, height } = res.image_size
+  if (!res.detections?.length || !width || !height) return []
+  return res.detections.map((d, i) => {
+    const confidence = normalizeConfidence(d.confidence)
+    const risk: Detection['risk'] =
+      confidence >= 60 ? 'high' : confidence >= 35 ? 'medium' : 'low'
+    return {
+      id: `y${i + 1}`,
+      label: d.class_name.charAt(0).toUpperCase() + d.class_name.slice(1),
+      type: 'weed',
+      confidence,
+      risk,
+      recommendation:
+        risk === 'high'
+          ? 'Weeds confirmed with high confidence. Plan spot-spraying of this zone.'
+          : 'Possible weeds. Verify on the ground before treatment.',
+      box: {
+        left: (d.box.x_min / width) * 100,
+        top: (d.box.y_min / height) * 100,
+        width: ((d.box.x_max - d.box.x_min) / width) * 100,
+        height: ((d.box.y_max - d.box.y_min) / height) * 100,
+      },
+    }
+  })
+}
+
+export function summarizeDetections(list: Detection[]): AnalysisSummary {
+  const high = list.filter((d) => d.risk === 'high').length
+  const medium = list.filter((d) => d.risk === 'medium').length
+  const low = list.filter((d) => d.risk === 'low').length
+  return {
+    critical_issues: high,
+    medium_issues: medium,
+    low_issues: low,
+    requires_immediate_action: high > 0,
+    overall_field_status: high > 0 ? 'attention_needed' : list.length > 0 ? 'monitor' : 'healthy',
+  }
 }
