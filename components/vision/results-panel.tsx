@@ -38,7 +38,7 @@ export function ResultsPanel({
         </div>
         <p className="mt-0.5 text-xs text-muted-foreground">
           {detections.length} objects detected
-          {cropType ? ` · crop: ${cropType}` : ''} · model v3.2-agri
+          {cropType ? ` · crop: ${cropType}` : ''} · YOLOv8n, custom-trained
         </p>
         {summaryText && (
           <p className="mt-2 rounded-md bg-muted px-2.5 py-2 text-xs leading-relaxed text-foreground">
@@ -98,8 +98,8 @@ export function ResultsPanel({
 
         {!loading && !error && detections.length === 0 && (
           <div className="flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm text-foreground">
-            <ShieldCheck className="h-4 w-4 text-primary" />
-            No issues detected in this field.
+            <Info className="h-4 w-4 shrink-0 text-primary" />
+            The model found no weeds in this image. This does not guarantee the field is weed-free.
           </div>
         )}
 
