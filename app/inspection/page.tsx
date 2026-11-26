@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import useSWR from 'swr'
 import { PageHeader } from '@/components/page-header'
 import { DetectionViewer } from '@/components/vision/detection-viewer'
@@ -30,6 +30,13 @@ export default function InspectionPage() {
   const [active, setActive] = useState<string | null>(null)
   const [file, setFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | undefined>(undefined)
+  const [blobPathname, setBlobPathname] = useState<string | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (imagePreview?.startsWith('blob:')) URL.revokeObjectURL(imagePreview)
+    }
+  }, [imagePreview])
 
   const { data, error, isLoading } = useSWR(
     file ? (['analyze', file] as [string, File]) : null,
@@ -37,16 +44,18 @@ export default function InspectionPage() {
     { revalidateOnFocus: false, shouldRetryOnError: false },
   )
 
-  function handleFileSelected(_name: string, previewUrl: string, selected: File) {
+  function handleFileSelected(_name: string, previewUrl: string, selected: File, pathname: string) {
     setImagePreview(previewUrl)
     setFile(selected)
+    setBlobPathname(pathname)
   }
 
   const detections: Detection[] = data ? mapYoloToDetections(data) : []
+  const storageNote = blobPathname ? ' · saved to private Blob storage' : ''
   const subtitle = data
-    ? `${file?.name} · ${data.detections_count} detections · ${data.image_size.width}×${data.image_size.height}px`
+    ? `${file?.name} · ${data.detections_count} detections · ${data.image_size.width}×${data.image_size.height}px${storageNote}`
     : isLoading
-      ? 'Analyzing with the YOLO model… (first request can take about a minute)'
+      ? `Analyzing with the YOLO model… (first request can take about a minute)${storageNote}`
       : 'Upload a drone photo to start analysis'
 
   return (
