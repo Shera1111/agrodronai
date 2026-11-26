@@ -218,6 +218,6 @@ export function summarizeDetections(list: Detection[]): AnalysisSummary {
     medium_issues: medium,
     low_issues: low,
     requires_immediate_action: high > 0,
-    overall_field_status: high > 0 ? 'attention_needed' : list.length > 0 ? 'monitor' : 'healthy',
+        overall_field_status: high > 0 ? 'attention_needed' : list.length > 0 ? 'monitor' : 'no weeds detected',
   }
 }
