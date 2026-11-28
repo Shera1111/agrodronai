@@ -1,69 +1,95 @@
-import { PageHeader } from '@/components/page-header'
-import { SummaryCards } from '@/components/dashboard/summary-cards'
-import { FieldMap } from '@/components/field-map'
-import { UploadButton } from '@/components/upload-button'
-import { Card } from '@/components/ui/card'
-import { fields, statusStyles } from '@/lib/data'
-import { cn } from '@/lib/utils'
-import Link from 'next/link'
-import { ArrowRight } from 'lucide-react'
+'use client'
 
-export default function DashboardPage() {
+import { useEffect, useRef, useState } from 'react'
+import useSWR from 'swr'
+import { PageHeader } from '@/components/page-header'
+import { DetectionViewer } from '@/components/vision/detection-viewer'
+import { ResultsPanel } from '@/components/vision/results-panel'
+import { UploadButton } from '@/components/upload-button'
+import {
+  mapYoloToDetections,
+  summarizeDetections,
+  type Detection,
+  type YoloResponse,
+} from '@/lib/data'
+import { buildRecord, saveAnalysis } from '@/lib/store'
+
+const BACKEND_URL = 'https://agro-drone-backend.onrender.com/'
+
+async function analyzeFetcher([, file]: [string, File]): Promise<YoloResponse> {
+  const form = new FormData()
+  form.append('image', file)
+  const res = await fetch(BACKEND_URL, { method: 'POST', body: form })
+  const data = await res.json()
+  if (!res.ok) {
+    throw new Error(data?.error ?? 'Analysis request failed.')
+  }
+  return data as YoloResponse
+}
+
+export default function InspectionPage() {
+  const [active, setActive] = useState<string | null>(null)
+  const [file, setFile] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | undefined>(undefined)
+  const savedKey = useRef<string | null>(null)
+
+  const { data, error, isLoading } = useSWR(
+    file ? (['analyze', file] as [string, File]) : null,
+    analyzeFetcher,
+    { revalidateOnFocus: false, shouldRetryOnError: false },
+  )
+
+  function handleFileSelected(_name: string, previewUrl: string, selected: File) {
+    setImagePreview(previewUrl)
+    setFile(selected)
+  }
+
+  const detections: Detection[] = data ? mapYoloToDetections(data) : []
+
+  // Каждый успешный анализ сохраняем один раз (нужно для Reports, Dashboard и Field Maps).
+  useEffect(() => {
+    if (!data || !file) return
+    const key = `${file.name}|${file.size}|${file.lastModified}`
+    if (savedKey.current === key) return
+    savedKey.current = key
+    saveAnalysis(
+      buildRecord(file.name, data.image_size.width, data.image_size.height, mapYoloToDetections(data)),
+    )
+  }, [data, file])
+
+  const subtitle = data
+    ? `${file?.name} · ${data.detections_count} detections · ${data.image_size.width}×${data.image_size.height}px`
+    : isLoading
+      ? 'Analyzing with the YOLO model… (first request can take about a minute)'
+      : 'Upload a drone photo to start analysis'
+
   return (
     <main>
       <PageHeader
-        title="Dashboard"
-        description="Fleet-wide crop intelligence across all monitored fields."
-        actions={<UploadButton />}
+        title="Drone Inspection"
+        description="AI Vision analysis of the uploaded field imagery."
+        actions={<UploadButton onFileSelected={handleFileSelected} />}
       />
 
-      <div className="space-y-6 p-6 lg:p-8">
-        <SummaryCards />
-
-        <div className="grid gap-6 xl:grid-cols-[1fr_340px]">
-          <Card className="p-5">
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <h2 className="text-base font-semibold text-foreground">Field Map</h2>
-                <p className="text-sm text-muted-foreground">
-                  Color-coded crop health across active parcels.
-                </p>
-              </div>
-              <Link
-                href="/maps"
-                className="flex items-center gap-1 text-sm font-medium text-accent hover:underline"
-              >
-                Full map <ArrowRight className="h-3.5 w-3.5" />
-              </Link>
-            </div>
-            <FieldMap />
-          </Card>
-
-          <Card className="p-5">
-            <h2 className="text-base font-semibold text-foreground">Field Status</h2>
-            <p className="text-sm text-muted-foreground">Latest scan per parcel.</p>
-            <ul className="mt-4 space-y-2">
-              {fields.map((f) => {
-                const s = statusStyles[f.status]
-                return (
-                  <li
-                    key={f.id}
-                    className="flex items-center gap-3 rounded-lg border border-border px-3 py-2.5"
-                  >
-                    <span className={cn('h-2.5 w-2.5 shrink-0 rounded-full', s.dot)} />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-foreground">{f.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {f.crop} · {f.acres} ac
-                      </p>
-                    </div>
-                    <span className="text-sm font-semibold text-foreground">{f.health}%</span>
-                  </li>
-                )
-              })}
-            </ul>
-          </Card>
-        </div>
+      <div className="grid gap-6 p-6 lg:grid-cols-[1fr_360px] lg:p-8">
+        <DetectionViewer
+          active={active}
+          onHover={setActive}
+          detections={detections}
+          title={file ? 'Analyzed image' : 'No image selected'}
+          subtitle={subtitle}
+          loading={isLoading}
+          imageSrc={imagePreview}
+        />
+        <ResultsPanel
+          active={active}
+          onHover={setActive}
+          detections={detections}
+          cropType={undefined}
+          summary={data ? summarizeDetections(detections) : undefined}
+          loading={isLoading}
+          error={error ? (error as Error).message : null}
+        />
       </div>
     </main>
   )
