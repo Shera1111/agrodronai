@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import useSWR from 'swr'
 import { PageHeader } from '@/components/page-header'
 import { DetectionViewer } from '@/components/vision/detection-viewer'
@@ -12,6 +12,7 @@ import {
   type Detection,
   type YoloResponse,
 } from '@/lib/data'
+import { buildRecord, saveAnalysis } from '@/lib/store'
 
 const BACKEND_URL = 'https://agro-drone-backend.onrender.com/'
 
@@ -30,13 +31,7 @@ export default function InspectionPage() {
   const [active, setActive] = useState<string | null>(null)
   const [file, setFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | undefined>(undefined)
-  const [blobPathname, setBlobPathname] = useState<string | null>(null)
-
-  useEffect(() => {
-    return () => {
-      if (imagePreview?.startsWith('blob:')) URL.revokeObjectURL(imagePreview)
-    }
-  }, [imagePreview])
+  const savedKey = useRef<string | null>(null)
 
   const { data, error, isLoading } = useSWR(
     file ? (['analyze', file] as [string, File]) : null,
@@ -44,25 +39,35 @@ export default function InspectionPage() {
     { revalidateOnFocus: false, shouldRetryOnError: false },
   )
 
-  function handleFileSelected(_name: string, previewUrl: string, selected: File, pathname: string) {
+  function handleFileSelected(_name: string, previewUrl: string, selected: File) {
     setImagePreview(previewUrl)
     setFile(selected)
-    setBlobPathname(pathname)
   }
 
   const detections: Detection[] = data ? mapYoloToDetections(data) : []
-  const storageNote = blobPathname ? ' · saved to private Blob storage' : ''
+
+  // Каждый успешный анализ сохраняем один раз (нужно для Reports, Dashboard и Field Maps).
+  useEffect(() => {
+    if (!data || !file) return
+    const key = `${file.name}|${file.size}|${file.lastModified}`
+    if (savedKey.current === key) return
+    savedKey.current = key
+    saveAnalysis(
+      buildRecord(file.name, data.image_size.width, data.image_size.height, mapYoloToDetections(data)),
+    )
+  }, [data, file])
+
   const subtitle = data
-    ? `${file?.name} · ${data.detections_count} detections · ${data.image_size.width}×${data.image_size.height}px${storageNote}`
+    ? `${file?.name} · ${data.detections_count} detections · ${data.image_size.width}×${data.image_size.height}px`
     : isLoading
-      ? `Analyzing with the YOLO model… (first request can take about a minute)${storageNote}`
+      ? 'Analyzing with the YOLO model… (first request can take about a minute)'
       : 'Upload a drone photo to start analysis'
 
   return (
     <main>
       <PageHeader
         title="Drone Inspection"
-        description="AI Vision analysis of the latest captured field imagery."
+        description="AI Vision analysis of the uploaded field imagery."
         actions={<UploadButton onFileSelected={handleFileSelected} />}
       />
 
@@ -71,7 +76,7 @@ export default function InspectionPage() {
           active={active}
           onHover={setActive}
           detections={detections}
-          title="Maple Hollow · Sector 4"
+          title={file ? 'Analyzed image' : 'No image selected'}
           subtitle={subtitle}
           loading={isLoading}
           imageSrc={imagePreview}
